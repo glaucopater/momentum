@@ -45,7 +45,7 @@ fn load_standard(path: &Path) -> Result<(DynamicImage, HashMap<String, String>)>
     
     let mut exif_map = HashMap::new();
     
-    let mut reader = Reader::new();
+    let reader = Reader::new();
     if let Ok(exif) = reader.read_from_container(&mut Cursor::new(&buf)) {
         if let Some(field) = exif.get_field(Tag::Orientation, In::PRIMARY) {
             if let Value::Short(ref v) = field.value {

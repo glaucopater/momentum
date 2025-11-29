@@ -2,7 +2,7 @@ use winit::window::Window;
 use wgpu::util::DeviceExt;
 use crate::texture;
 use glam::{Mat4, Vec3};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
