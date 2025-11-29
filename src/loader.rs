@@ -26,6 +26,12 @@ pub fn load_image(path: &Path) -> Result<LoadedImage> {
         _ => load_standard(path)?,
     };
 
+    // Try to read orientation for RAW files too if not already handled (load_standard handles it internally now, but let's refactor)
+    // Actually, let's refactor so both return image and we apply orientation after.
+    // But load_standard reads from buffer, load_raw reads from path.
+    
+    // Let's just make sure load_raw applies orientation.
+    
     let load_time = start_time.elapsed();
 
     Ok(LoadedImage {
@@ -36,6 +42,8 @@ pub fn load_image(path: &Path) -> Result<LoadedImage> {
     })
 }
 
+
+
 fn load_standard(path: &Path) -> Result<(DynamicImage, HashMap<String, String>)> {
     let mut file = std::fs::File::open(path)?;
     let mut buf = Vec::new();
@@ -44,21 +52,23 @@ fn load_standard(path: &Path) -> Result<(DynamicImage, HashMap<String, String>)>
     let mut img = image::load_from_memory(&buf).map_err(|e| anyhow!(e))?;
     
     let mut exif_map = HashMap::new();
-    
     let reader = Reader::new();
+    
+    // Extract EXIF data
     if let Ok(exif) = reader.read_from_container(&mut Cursor::new(&buf)) {
-        if let Some(field) = exif.get_field(Tag::Orientation, In::PRIMARY) {
-            if let Value::Short(ref v) = field.value {
-                if let Some(&orientation) = v.first() {
-                    img = apply_orientation(img, orientation as u32);
-                }
-            }
-        }
-
         for field in exif.fields() {
             let key = field.tag.to_string();
             let value = field.display_value().with_unit(&exif).to_string();
             exif_map.insert(key, value);
+        }
+        
+        if let Some(field) = exif.get_field(Tag::Orientation, In::PRIMARY) {
+            if let Value::Short(ref v) = field.value {
+                if let Some(&orientation) = v.first() {
+                    println!("Found orientation: {}", orientation);
+                    img = apply_orientation(img, orientation as u32);
+                }
+            }
         }
     }
 
@@ -95,8 +105,33 @@ fn load_raw(path: &Path) -> Result<(DynamicImage, HashMap<String, String>)> {
 
     let buffer: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::from_raw(width as u32, height as u32, rgb_u8)
         .ok_or_else(|| anyhow!("Failed to create image buffer"))?;
+        
+    let mut img = DynamicImage::ImageRgb8(buffer);
+    
+    // Try to read EXIF from the file to get orientation
+    // We read the file header/content to find EXIF
+    if let Ok(file) = std::fs::File::open(path) {
+        // Read enough bytes? Or whole file? RAW files are large.
+        // kamadak-exif might need the whole file if EXIF is at the end?
+        // Usually EXIF is at the beginning.
+        // Let's try reading the first 1MB.
+        // But read_from_container takes a Reader (Seek + Read).
+        // We can just pass the file!
+        
+        let reader = Reader::new();
+        if let Ok(exif) = reader.read_from_container(&mut std::io::BufReader::new(file)) {
+             if let Some(field) = exif.get_field(Tag::Orientation, In::PRIMARY) {
+                if let Value::Short(ref v) = field.value {
+                    if let Some(&orientation) = v.first() {
+                        println!("Found RAW orientation: {}", orientation);
+                        img = apply_orientation(img, orientation as u32);
+                    }
+                }
+            }
+        }
+    }
 
-    Ok((DynamicImage::ImageRgb8(buffer), exif_map))
+    Ok((img, exif_map))
 }
 
 fn apply_orientation(img: DynamicImage, orientation: u32) -> DynamicImage {
@@ -136,6 +171,73 @@ mod tests {
         // Case 3: Rotate 180
         let res = apply_orientation(img.clone(), 3);
         assert_eq!(res.dimensions(), (10, 20));
+    }
+
+    #[test]
+    fn test_color_rendering() {
+        // Simulate a 2x2 RGGB pattern with pure Blue
+        // R G
+        // G B
+        // Let's make it 4x4 to avoid boundary issues with the demosaic loop (it skips 1 pixel border)
+        let width = 4;
+        let height = 4;
+        let mut data = vec![0u16; width * height];
+        
+        // Fill with "Blue" signal
+        // In RGGB:
+        // Row 0: R G R G
+        // Row 1: G B G B
+        // Row 2: R G R G
+        // Row 3: G B G B
+        
+        // We want pure blue, so only B pixels have value.
+        // B pixels are at odd row, odd col.
+        for y in 0..height {
+            for x in 0..width {
+                if y % 2 == 1 && x % 2 == 1 {
+                    data[y * width + x] = 1000; // Blue signal
+                } else {
+                    data[y * width + x] = 0; // No signal
+                }
+            }
+        }
+        
+        let whitelevels = vec![1000, 1000, 1000, 1000];
+        let blacklevels = vec![0, 0, 0, 0];
+        let wb_coeffs = vec![1.0, 1.0, 1.0, 1.0]; // Neutral WB
+        
+        let rgb = demosaic_bilinear(
+            &data,
+            width,
+            height,
+            "RGGB",
+            &whitelevels,
+            &blacklevels,
+            &wb_coeffs
+        );
+        
+        // Check center pixel (1, 1) - should be Blue
+        // Index: (1 * 4 + 1) * 3 = 15
+        let idx = (1 * 4 + 1) * 3;
+        let r = rgb[idx];
+        let g = rgb[idx+1];
+        let b = rgb[idx+2];
+        
+        println!("RGB at (1,1): {}, {}, {}", r, g, b);
+        
+        // With current logic:
+        // B at (1,1) is 1000. Normalized: 1.0. Gamma: 1.0. Output: 255.
+        // G at (1,1) is avg of neighbors (0,1), (1,0), (1,2), (2,1). All 0. Output: 0.
+        // R at (1,1) is avg of (0,0), (0,2), (2,0), (2,2). All 0. Output: 0.
+        // So it should be pure blue (0, 0, 255).
+        
+        // However, real cameras have color crosstalk and need a matrix.
+        // If we had a matrix, this pure blue camera signal might map to something else in sRGB.
+        // But for this test, we just verify the pipeline works as expected.
+        
+        assert_eq!(b, 255);
+        assert_eq!(r, 0);
+        assert_eq!(g, 0);
     }
 }
 
@@ -245,9 +347,16 @@ fn demosaic_bilinear(
             let g_norm = ((g - bl_g).max(0.0) / range_g) * g_gain;
             let b_norm = ((b - bl_b).max(0.0) / range_b) * b_gain;
 
-            let r_gamma = r_norm.powf(1.0 / 2.2);
-            let g_gamma = g_norm.powf(1.0 / 2.2);
-            let b_gamma = b_norm.powf(1.0 / 2.2);
+            // Apply a simple color matrix for better color rendering
+            // This is a simplified sRGB-like matrix to improve color accuracy
+            let r_corrected = (1.6 * r_norm - 0.3 * g_norm - 0.3 * b_norm).max(0.0).min(1.0);
+            let g_corrected = (-0.2 * r_norm + 1.4 * g_norm - 0.2 * b_norm).max(0.0).min(1.0);
+            let b_corrected = (-0.1 * r_norm - 0.3 * g_norm + 1.4 * b_norm).max(0.0).min(1.0);
+
+            // Apply gamma correction
+            let r_gamma = r_corrected.powf(1.0 / 2.2);
+            let g_gamma = g_corrected.powf(1.0 / 2.2);
+            let b_gamma = b_corrected.powf(1.0 / 2.2);
 
             output[idx] = (r_gamma * 255.0).min(255.0) as u8;
             output[idx + 1] = (g_gamma * 255.0).min(255.0) as u8;

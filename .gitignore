@@ -1,5 +1,5 @@
 /target
-**/*.log
+#**/*.log
 **/*.rs.bk
 .DS_Store
 Thumbs.db
