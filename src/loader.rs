@@ -1,14 +1,17 @@
 use anyhow::{anyhow, Result};
 use image::{DynamicImage, ImageBuffer, Rgb};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use std::collections::HashMap;
+use std::io::Cursor;
+use exif::{Reader, Tag, In, Value};
 
 #[derive(Debug)]
 pub struct LoadedImage {
     pub image: DynamicImage,
     pub exif: HashMap<String, String>,
     pub load_time: Duration,
+    pub path: PathBuf,
 }
 
 pub fn load_image(path: &Path) -> Result<LoadedImage> {
@@ -29,15 +32,35 @@ pub fn load_image(path: &Path) -> Result<LoadedImage> {
         image,
         exif,
         load_time,
+        path: path.to_path_buf(),
     })
 }
 
 fn load_standard(path: &Path) -> Result<(DynamicImage, HashMap<String, String>)> {
-    let img = image::open(path).map_err(|e| anyhow!(e))?;
+    let mut file = std::fs::File::open(path)?;
+    let mut buf = Vec::new();
+    std::io::Read::read_to_end(&mut file, &mut buf)?;
     
-    let exif_map = HashMap::new();
+    let mut img = image::load_from_memory(&buf).map_err(|e| anyhow!(e))?;
     
-    // TODO: Add EXIF extraction for JPEG files using kamadak-exif
+    let mut exif_map = HashMap::new();
+    
+    let mut reader = Reader::new();
+    if let Ok(exif) = reader.read_from_container(&mut Cursor::new(&buf)) {
+        if let Some(field) = exif.get_field(Tag::Orientation, In::PRIMARY) {
+            if let Value::Short(ref v) = field.value {
+                if let Some(&orientation) = v.first() {
+                    img = apply_orientation(img, orientation as u32);
+                }
+            }
+        }
+
+        for field in exif.fields() {
+            let key = field.tag.to_string();
+            let value = field.display_value().with_unit(&exif).to_string();
+            exif_map.insert(key, value);
+        }
+    }
 
     Ok((img, exif_map))
 }
@@ -74,6 +97,46 @@ fn load_raw(path: &Path) -> Result<(DynamicImage, HashMap<String, String>)> {
         .ok_or_else(|| anyhow!("Failed to create image buffer"))?;
 
     Ok((DynamicImage::ImageRgb8(buffer), exif_map))
+}
+
+fn apply_orientation(img: DynamicImage, orientation: u32) -> DynamicImage {
+    match orientation {
+        2 => img.fliph(),
+        3 => img.rotate180(),
+        4 => img.flipv(),
+        5 => img.rotate90().fliph(),
+        6 => img.rotate90(),
+        7 => img.rotate270().fliph(),
+        8 => img.rotate270(),
+        _ => img,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use image::GenericImageView;
+
+    #[test]
+    fn test_apply_orientation() {
+        let img = DynamicImage::new_rgb8(10, 20);
+        
+        // Case 1: Normal (no change)
+        let res = apply_orientation(img.clone(), 1);
+        assert_eq!(res.dimensions(), (10, 20));
+
+        // Case 6: Rotate 90 CW
+        let res = apply_orientation(img.clone(), 6);
+        assert_eq!(res.dimensions(), (20, 10));
+        
+        // Case 8: Rotate 270 CW (90 CCW)
+        let res = apply_orientation(img.clone(), 8);
+        assert_eq!(res.dimensions(), (20, 10));
+        
+        // Case 3: Rotate 180
+        let res = apply_orientation(img.clone(), 3);
+        assert_eq!(res.dimensions(), (10, 20));
+    }
 }
 
 fn demosaic_bilinear(

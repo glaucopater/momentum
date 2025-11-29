@@ -2,6 +2,7 @@ use winit::window::Window;
 use wgpu::util::DeviceExt;
 use crate::texture;
 use glam::{Mat4, Vec3};
+use std::path::{Path, PathBuf};
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -122,6 +123,9 @@ pub struct State<'a> {
     load_time: std::time::Duration,
     memory_usage: u64,
     exif_data: std::collections::HashMap<String, String>,
+    
+    // Navigation
+    navigator: crate::navigator::Navigator,
 }
 
 impl<'a> State<'a> {
@@ -341,6 +345,7 @@ impl<'a> State<'a> {
             load_time: std::time::Duration::from_secs(0),
             memory_usage: 0,
             exif_data: std::collections::HashMap::new(),
+            navigator: crate::navigator::Navigator::new(),
         }
     }
 
@@ -383,6 +388,17 @@ impl<'a> State<'a> {
         self.update_window_title();
         
         self.window.request_redraw();
+        
+        // Update file list if needed
+        self.navigator.update_file_list(&loaded_image.path);
+    }
+    
+    pub fn get_next_image(&self) -> Option<PathBuf> {
+        self.navigator.get_next_image()
+    }
+    
+    pub fn get_prev_image(&self) -> Option<PathBuf> {
+        self.navigator.get_prev_image()
     }
 
     pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
@@ -454,6 +470,12 @@ impl<'a> State<'a> {
     fn update_window_title(&self) {
         let zoom_pct = (1.0 / self.camera.zoom * 100.0) as i32;
         let mut title = format!("Momemtum - Zoom: {}%", zoom_pct);
+        
+        if let Some(path) = &self.navigator.current_path {
+            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                title.push_str(&format!(" | {}", name));
+            }
+        }
         
         if self.load_time.as_millis() > 0 {
             title.push_str(&format!(" | Load: {:.0}ms", self.load_time.as_secs_f64() * 1000.0));

@@ -3,6 +3,7 @@
 mod state;
 mod texture;
 mod loader;
+mod navigator;
 use state::State;
 use winit::{
     event::*,
@@ -38,16 +39,51 @@ fn main() {
             } if window_id == state.window.id() => {
                 if !state.input(event) {
                     match event {
-                        WindowEvent::CloseRequested
-                        | WindowEvent::KeyboardInput {
+                        WindowEvent::CloseRequested => elwt.exit(),
+                        WindowEvent::KeyboardInput {
                             event:
                                 KeyEvent {
                                     state: ElementState::Pressed,
-                                    physical_key: winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::Escape),
+                                    physical_key: winit::keyboard::PhysicalKey::Code(keycode),
                                     ..
                                 },
                             ..
-                        } => elwt.exit(),
+                        } => {
+                            match keycode {
+                                winit::keyboard::KeyCode::Escape => elwt.exit(),
+                                winit::keyboard::KeyCode::ArrowLeft => {
+                                    if let Some(path) = state.get_prev_image() {
+                                        let proxy = event_loop_proxy.clone();
+                                        std::thread::spawn(move || {
+                                            match crate::loader::load_image(&path) {
+                                                Ok(img) => {
+                                                    let _ = proxy.send_event(AppEvent::ImageLoaded(img));
+                                                }
+                                                Err(e) => {
+                                                    eprintln!("Failed to load image: {:?}", e);
+                                                }
+                                            }
+                                        });
+                                    }
+                                }
+                                winit::keyboard::KeyCode::ArrowRight => {
+                                    if let Some(path) = state.get_next_image() {
+                                        let proxy = event_loop_proxy.clone();
+                                        std::thread::spawn(move || {
+                                            match crate::loader::load_image(&path) {
+                                                Ok(img) => {
+                                                    let _ = proxy.send_event(AppEvent::ImageLoaded(img));
+                                                }
+                                                Err(e) => {
+                                                    eprintln!("Failed to load image: {:?}", e);
+                                                }
+                                            }
+                                        });
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
                         WindowEvent::Resized(physical_size) => {
                             state.resize(*physical_size);
                         }
