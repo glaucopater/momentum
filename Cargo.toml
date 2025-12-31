@@ -8,6 +8,7 @@ name = "momemtum"
 path = "src/main.rs"
 
 [target.'cfg(windows)'.build-dependencies]
+winres = "0.1"
 
 [profile.release]
 strip = true
@@ -26,6 +27,7 @@ log = "0.4"
 anyhow = "1.0"
 glam = "0.25"
 kamadak-exif = "0.5"
+ico = "0.3"
 
 
 

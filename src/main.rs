@@ -23,6 +23,31 @@ fn main() {
     let event_loop = EventLoopBuilder::<AppEvent>::with_user_event().build().unwrap();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
     window.set_title("Momemtum Image Viewer");
+    
+    // Set window icon from assets/icon.ico
+    {
+        use std::fs::File;
+        use std::io::BufReader;
+        
+        let icon_path = std::path::Path::new("assets").join("icon.ico");
+        if let Ok(file) = File::open(&icon_path) {
+            let reader = BufReader::new(file);
+            if let Ok(icon_dir) = ico::IconDir::read(reader) {
+                // Get the largest icon entry
+                if let Some(entry) = icon_dir.entries().iter().max_by_key(|e| e.width()) {
+                    if let Ok(image) = entry.decode() {
+                        let width = image.width();
+                        let height = image.height();
+                        let rgba_data = image.rgba_data().to_vec();
+                        
+                        if let Ok(icon) = winit::window::Icon::from_rgba(rgba_data, width, height) {
+                            window.set_window_icon(Some(icon));
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     let event_loop_proxy = event_loop.create_proxy();
 
