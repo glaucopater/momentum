@@ -1,6 +1,6 @@
-# momemtum Image Viewer
+# Momentum Image Viewer
 
-momemtum is a high-performance image viewer written in Rust, designed for speed and simplicity. It supports standard image formats (JPEG, PNG) as well as RAW formats (NEF, CR2, DNG, ARW).
+momentum is a high-performance image viewer written in Rust, designed for speed and simplicity. It supports standard image formats (JPEG, PNG) as well as RAW formats (NEF, CR2, DNG, ARW).
 
 ## Features
 
@@ -17,7 +17,7 @@ Ensure you have Rust and Cargo installed.
 
 ```bash
 git clone https://github.com/glaucopater/momentum.git
-cd momemtum
+cd momentum
 cargo build --release
 ```
 

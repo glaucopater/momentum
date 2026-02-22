@@ -22,7 +22,7 @@ fn main() {
     env_logger::init();
     let event_loop = EventLoopBuilder::<AppEvent>::with_user_event().build().unwrap();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
-    window.set_title("momemtum Image Viewer");
+    window.set_title("momentum Image Viewer");
     
     // Set window icon from assets/icon.ico
     {

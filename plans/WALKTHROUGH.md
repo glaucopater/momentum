@@ -1,4 +1,4 @@
-# momemtum Image Viewer - Development Walkthrough
+# momentum Image Viewer - Development Walkthrough
 
 ## Project Overview
 
@@ -94,7 +94,7 @@ Window title shows real-time information:
 - **Memory usage**: Approximate image memory footprint
 - **Camera model**: Extracted from EXIF data when available
 
-Example: `momemtum - Zoom: 100% | Load: 245ms | Memory: ~96MB | NIKON D850`
+Example: `momentum - Zoom: 100% | Load: 245ms | Memory: ~96MB | NIKON D850`
 
 ## Issues Resolved
 
@@ -158,7 +158,7 @@ required_limits: adapter.limits()
 ## Project Structure
 
 ```
-momemtum/
+momentum/
 ├── Cargo.toml              # Dependencies and project metadata
 ├── src/
 │   ├── main.rs            # Event loop and async loading
