@@ -1,10 +1,10 @@
 [package]
-name = "momemtum"
+name = "momentum"
 version = "0.1.0"
 edition = "2021"
 
 [[bin]]
-name = "momemtum"
+name = "momentum"
 path = "src/main.rs"
 
 [target.'cfg(windows)'.build-dependencies]
