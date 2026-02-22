@@ -1,4 +1,4 @@
-# Momemtum Image Viewer - Development Walkthrough
+# momemtum Image Viewer - Development Walkthrough
 
 ## Project Overview
 
@@ -94,7 +94,7 @@ Window title shows real-time information:
 - **Memory usage**: Approximate image memory footprint
 - **Camera model**: Extracted from EXIF data when available
 
-Example: `Momemtum - Zoom: 100% | Load: 245ms | Memory: ~96MB | NIKON D850`
+Example: `momemtum - Zoom: 100% | Load: 245ms | Memory: ~96MB | NIKON D850`
 
 ## Issues Resolved
 

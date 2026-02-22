@@ -469,7 +469,7 @@ impl<'a> State<'a> {
     
     fn update_window_title(&self) {
         let zoom_pct = (1.0 / self.camera.zoom * 100.0) as i32;
-        let mut title = format!("Momemtum - Zoom: {}%", zoom_pct);
+        let mut title = format!("momemtum - Zoom: {}%", zoom_pct);
         
         if let Some(path) = &self.navigator.current_path {
             if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
